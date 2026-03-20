@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "ashihmin_d_mult_matr_crs/common/include/common.hpp"
+#include "ashihmin_d_mult_matr_crs/omp/include/ops_omp.hpp"
 #include "ashihmin_d_mult_matr_crs/seq/include/ops_seq.hpp"
 #include "util/include/func_test_util.hpp"
 #include "util/include/util.hpp"
@@ -108,8 +109,8 @@ const std::array<TestType, 6> kTestParams = {
                     DenseMatrix{{4, 0, 0}, {0, 5, 0}, {0, 0, 6}}, DenseMatrix{{4, 0, 0}, {0, 10, 0}, {0, 0, 18}}),
     std::make_tuple("SingleElement", DenseMatrix{{7}}, DenseMatrix{{8}}, DenseMatrix{{56}})};
 
-const auto kTestTasksList = std::tuple_cat(
-    ppc::util::AddFuncTask<AshihminDMultMatrCrsSEQ, InType>(kTestParams, PPC_SETTINGS_ashihmin_d_mult_matr_crs));
+const auto kTestTasksList = std::tuple_cat(ppc::util::AddFuncTask<AshihminDMultMatrCrsSEQ, AshihminDMultMatrCrsOMP>(
+    kTestParams, PPC_SETTINGS_ashihmin_d_mult_matr_crs));
 const auto kGtestValues = ppc::util::ExpandToValues(kTestTasksList);
 
 const auto kPerfTestName = AshihminDMultMatrCrsFuncTests::PrintFuncTestName<AshihminDMultMatrCrsFuncTests>;
