@@ -12,7 +12,6 @@
 
 namespace ashihmin_d_mult_matr_crs {
 
-// Вспомогательный конвертер (common.hpp менять нельзя)
 inline CRSMatrix LocalDenseToCRS(const DenseMatrix &dense) {
   CRSMatrix res;
   res.rows = static_cast<int>(dense.size());
@@ -30,12 +29,10 @@ inline CRSMatrix LocalDenseToCRS(const DenseMatrix &dense) {
   return res;
 }
 
-// Обертка для данных
 struct TaskData {
   std::string name;
   InType input;
   OutType expected;
-  // Важно: оператор приведения для SEQ и OMP конструкторов
   operator InType() const {
     return input;
   }
@@ -43,7 +40,6 @@ struct TaskData {
 
 class AshihminDMultMatrCrsFuncTests : public ppc::util::BaseRunFuncTests<InType, OutType, TaskData> {
  public:
-  // ИСПРАВЛЕНО: сигнатура должна принимать именно тип данных (TaskData)
   static std::string PrintTestParam(const TaskData &param) {
     return param.name;
   }
@@ -77,7 +73,6 @@ class AshihminDMultMatrCrsFuncTests : public ppc::util::BaseRunFuncTests<InType,
   CRSMatrix expected_output_;
 };
 
-// Тестовые наборы
 static const std::vector<TaskData> kTestParams = {
     {"Identity_2x2",
      {LocalDenseToCRS({{1, 0}, {0, 1}}), LocalDenseToCRS({{5, 6}, {7, 8}})},
@@ -100,10 +95,8 @@ TEST_P(AshihminDMultMatrCrsFuncTests, SpGemm) {
   ExecuteTest(GetParam());
 }
 
-// ИСПРАВЛЕНО: Явно указываем SEQ, OMP и тип элемента TaskData
-const auto kTestTasksList =
-    std::tuple_cat(ppc::util::AddFuncTask<AshihminDMultMatrCrsSEQ, AshihminDMultMatrCrsOMP, TaskData>(
-        kTestParams, PPC_SETTINGS_ashihmin_d_mult_matr_crs));
+const auto kTestTasksList = std::tuple_cat(ppc::util::AddFuncTask<AshihminDMultMatrCrsSEQ, AshihminDMultMatrCrsOMP>(
+    kTestParams, PPC_SETTINGS_ashihmin_d_mult_matr_crs));
 
 const auto kGtestValues = ppc::util::ExpandToValues(kTestTasksList);
 INSTANTIATE_TEST_SUITE_P(AshihminSparseCRSTests, AshihminDMultMatrCrsFuncTests, kGtestValues,
