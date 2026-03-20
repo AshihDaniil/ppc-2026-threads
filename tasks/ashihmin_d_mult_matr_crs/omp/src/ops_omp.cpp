@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <map>
+#include <vector>
 
 namespace ashihmin_d_mult_matr_crs {
 
@@ -22,6 +23,8 @@ bool AshihminDMultMatrCrsOMP::PreProcessingImpl() {
   matrix_c.rows = GetInput().first.rows;
   matrix_c.cols = GetInput().second.cols;
   matrix_c.row_ptr.assign(matrix_c.rows + 1, 0);
+  matrix_c.values.clear();
+  matrix_c.col_index.clear();
   return true;
 }
 
