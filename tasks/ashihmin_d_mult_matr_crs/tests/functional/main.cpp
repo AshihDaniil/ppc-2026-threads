@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <array>
 #include <cmath>
 #include <string>
 #include <tuple>
@@ -40,6 +41,9 @@ struct TaskData {
 
 class AshihminDMultMatrCrsFuncTests : public ppc::util::BaseRunFuncTests<InType, OutType, TaskData> {
  public:
+  static std::string PrintTestParam(const testing::TestParamInfo<TaskData> &info) {
+    return info.param.name;
+  }
   static std::string PrintTestParam(const TaskData &param) {
     return param.name;
   }
@@ -73,23 +77,23 @@ class AshihminDMultMatrCrsFuncTests : public ppc::util::BaseRunFuncTests<InType,
   CRSMatrix expected_output_;
 };
 
-static const std::vector<TaskData> kTestParams = {
-    {"Identity_2x2",
-     {LocalDenseToCRS({{1, 0}, {0, 1}}), LocalDenseToCRS({{5, 6}, {7, 8}})},
-     LocalDenseToCRS({{5, 6}, {7, 8}})},
-    {"ZeroMatrix",
-     {LocalDenseToCRS({{0, 0}, {0, 0}}), LocalDenseToCRS({{1, 2}, {3, 4}})},
-     LocalDenseToCRS({{0, 0}, {0, 0}})},
-    {"Simple_2x2",
-     {LocalDenseToCRS({{1, 2}, {3, 4}}), LocalDenseToCRS({{5, 6}, {7, 8}})},
-     LocalDenseToCRS({{19, 22}, {43, 50}})},
-    {"Rectangular_2x3_3x2",
-     {LocalDenseToCRS({{1, 0, 2}, {0, 3, 0}}), LocalDenseToCRS({{0, 1}, {4, 0}, {5, 6}})},
-     LocalDenseToCRS({{10, 13}, {12, 0}})},
-    {"SparseDiagonal",
-     {LocalDenseToCRS({{1, 0, 0}, {0, 2, 0}, {0, 0, 3}}), LocalDenseToCRS({{4, 0, 0}, {0, 5, 0}, {0, 0, 6}})},
-     LocalDenseToCRS({{4, 0, 0}, {0, 10, 0}, {0, 0, 18}})},
-    {"SingleElement", {LocalDenseToCRS({{7}}), LocalDenseToCRS({{8}})}, LocalDenseToCRS({{56}})}};
+static const std::array<TaskData, 6> kTestParams = {
+    {{"Identity_2x2",
+      {LocalDenseToCRS({{1, 0}, {0, 1}}), LocalDenseToCRS({{5, 6}, {7, 8}})},
+      LocalDenseToCRS({{5, 6}, {7, 8}})},
+     {"ZeroMatrix",
+      {LocalDenseToCRS({{0, 0}, {0, 0}}), LocalDenseToCRS({{1, 2}, {3, 4}})},
+      LocalDenseToCRS({{0, 0}, {0, 0}})},
+     {"Simple_2x2",
+      {LocalDenseToCRS({{1, 2}, {3, 4}}), LocalDenseToCRS({{5, 6}, {7, 8}})},
+      LocalDenseToCRS({{19, 22}, {43, 50}})},
+     {"Rectangular_2x3_3x2",
+      {LocalDenseToCRS({{1, 0, 2}, {0, 3, 0}}), LocalDenseToCRS({{0, 1}, {4, 0}, {5, 6}})},
+      LocalDenseToCRS({{10, 13}, {12, 0}})},
+     {"SparseDiagonal",
+      {LocalDenseToCRS({{1, 0, 0}, {0, 2, 0}, {0, 0, 3}}), LocalDenseToCRS({{4, 0, 0}, {0, 5, 0}, {0, 0, 6}})},
+      LocalDenseToCRS({{4, 0, 0}, {0, 10, 0}, {0, 0, 18}})},
+     {"SingleElement", {LocalDenseToCRS({{7}}), LocalDenseToCRS({{8}})}, LocalDenseToCRS({{56}})}}};
 
 TEST_P(AshihminDMultMatrCrsFuncTests, SpGemm) {
   ExecuteTest(GetParam());

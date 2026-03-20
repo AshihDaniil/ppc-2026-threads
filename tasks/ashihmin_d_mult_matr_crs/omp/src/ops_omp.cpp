@@ -32,22 +32,26 @@ bool AshihminDMultMatrCrsOMP::RunImpl() {
   const auto &A = GetInput().first;
   const auto &B = GetInput().second;
   auto &C = GetOutput();
-  int rows_a = A.rows;
 
+  int rows_a = A.rows;
   std::vector<std::vector<int>> local_cols(rows_a);
   std::vector<std::vector<double>> local_vals(rows_a);
 
 #pragma omp parallel for
   for (int i = 0; i < rows_a; ++i) {
-    std::map<int, double> row_acc;
+    std::map<int, double> row_accumulator;
     for (int j = A.row_ptr[i]; j < A.row_ptr[i + 1]; ++j) {
       int col_a = A.col_index[j];
       double val_a = A.values[j];
+
       for (int k = B.row_ptr[col_a]; k < B.row_ptr[col_a + 1]; ++k) {
-        row_acc[B.col_index[k]] += val_a * B.values[k];
+        int col_b = B.col_index[k];
+        double val_b = B.values[k];
+        row_accumulator[col_b] += val_a * val_b;
       }
     }
-    for (const auto &[col, val] : row_acc) {
+
+    for (const auto &[col, val] : row_accumulator) {
       if (std::abs(val) > 1e-15) {
         local_cols[i].push_back(col);
         local_vals[i].push_back(val);
@@ -60,6 +64,7 @@ bool AshihminDMultMatrCrsOMP::RunImpl() {
     C.values.insert(C.values.end(), local_vals[i].begin(), local_vals[i].end());
     C.row_ptr[i + 1] = static_cast<int>(C.values.size());
   }
+
   return true;
 }
 
