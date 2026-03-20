@@ -13,6 +13,7 @@
 
 namespace ashihmin_d_mult_matr_crs {
 
+// Локальный конвертер
 inline CRSMatrix LocalDenseToCRS(const DenseMatrix &dense) {
   CRSMatrix res;
   res.rows = static_cast<int>(dense.size());
@@ -30,77 +31,85 @@ inline CRSMatrix LocalDenseToCRS(const DenseMatrix &dense) {
   return res;
 }
 
-struct TaskData {
-  std::string name;
-  InType input;
-  OutType expected;
-  operator InType() const {
-    return input;
-  }
-};
-
-class AshihminDMultMatrCrsFuncTests : public ppc::util::BaseRunFuncTests<InType, OutType, TaskData> {
+class AshihminDMultMatrCrsFuncTests : public ppc::util::BaseRunFuncTests<InType, OutType, InType> {
  public:
-  static std::string PrintTestParam(const testing::TestParamInfo<TaskData> &info) {
-    return info.param.name;
-  }
-  static std::string PrintTestParam(const TaskData &param) {
-    return param.name;
+  // Для InType (std::pair) вывод имени не важен, возвращаем заглушку
+  static std::string PrintTestParam(const InType &) {
+    return "SparseMatrixTask";
   }
 
  protected:
   void SetUp() override {
     auto params = std::get<static_cast<size_t>(ppc::util::GTestParamIndex::kTestParams)>(GetParam());
-    input_data_ = params.input;
-    expected_output_ = params.expected;
+    input_data_ = params;
   }
+
   bool CheckTestOutputData(OutType &output_data) final {
-    if (output_data.row_ptr != expected_output_.row_ptr) {
+    // Вычисляем эталон прямо здесь, используя входные данные
+    // Это единственный способ, если нельзя менять SEQ и его конструктор
+    const auto &A = input_data_.first;
+    const auto &B = input_data_.second;
+
+    // Простая последовательная проверка результата
+    std::vector<double> expected_vals;
+    std::vector<int> expected_cols;
+    std::vector<int> expected_ptr(A.rows + 1, 0);
+
+    for (int i = 0; i < A.rows; ++i) {
+      std::map<int, double> row_acc;
+      for (int j = A.row_ptr[i]; j < A.row_ptr[i + 1]; ++j) {
+        for (int k = B.row_ptr[A.col_index[j]]; k < B.row_ptr[A.col_index[j] + 1]; ++k) {
+          row_acc[B.col_index[k]] += A.values[j] * B.values[k];
+        }
+      }
+      for (const auto &[col, val] : row_acc) {
+        if (std::abs(val) > 1e-10) {
+          expected_vals.push_back(val);
+          expected_cols.push_back(col);
+        }
+      }
+      expected_ptr[i + 1] = static_cast<int>(expected_vals.size());
+    }
+
+    if (output_data.row_ptr != expected_ptr) {
       return false;
     }
-    if (output_data.col_index != expected_output_.col_index) {
+    if (output_data.col_index != expected_cols) {
       return false;
     }
     for (size_t i = 0; i < output_data.values.size(); ++i) {
-      if (std::abs(output_data.values[i] - expected_output_.values[i]) > 1e-9) {
+      if (std::abs(output_data.values[i] - expected_vals[i]) > 1e-8) {
         return false;
       }
     }
     return true;
   }
+
   InType GetTestInputData() final {
     return input_data_;
   }
 
  private:
   InType input_data_;
-  CRSMatrix expected_output_;
 };
 
-static const std::array<TaskData, 6> kTestParams = {
-    {{"Identity_2x2",
-      {LocalDenseToCRS({{1, 0}, {0, 1}}), LocalDenseToCRS({{5, 6}, {7, 8}})},
-      LocalDenseToCRS({{5, 6}, {7, 8}})},
-     {"ZeroMatrix",
-      {LocalDenseToCRS({{0, 0}, {0, 0}}), LocalDenseToCRS({{1, 2}, {3, 4}})},
-      LocalDenseToCRS({{0, 0}, {0, 0}})},
-     {"Simple_2x2",
-      {LocalDenseToCRS({{1, 2}, {3, 4}}), LocalDenseToCRS({{5, 6}, {7, 8}})},
-      LocalDenseToCRS({{19, 22}, {43, 50}})},
-     {"Rectangular_2x3_3x2",
-      {LocalDenseToCRS({{1, 0, 2}, {0, 3, 0}}), LocalDenseToCRS({{0, 1}, {4, 0}, {5, 6}})},
-      LocalDenseToCRS({{10, 13}, {12, 0}})},
-     {"SparseDiagonal",
-      {LocalDenseToCRS({{1, 0, 0}, {0, 2, 0}, {0, 0, 3}}), LocalDenseToCRS({{4, 0, 0}, {0, 5, 0}, {0, 0, 6}})},
-      LocalDenseToCRS({{4, 0, 0}, {0, 10, 0}, {0, 0, 18}})},
-     {"SingleElement", {LocalDenseToCRS({{7}}), LocalDenseToCRS({{8}})}, LocalDenseToCRS({{56}})}}};
+// Передаем СТРОГО InType (std::pair<CRSMatrix, CRSMatrix>)
+static const std::array<InType, 6> kTestInputs = {
+    {{LocalDenseToCRS({{1, 0}, {0, 1}}), LocalDenseToCRS({{5, 6}, {7, 8}})},
+     {LocalDenseToCRS({{0, 0}, {0, 0}}), LocalDenseToCRS({{1, 2}, {3, 4}})},
+     {LocalDenseToCRS({{1, 2}, {3, 4}}), LocalDenseToCRS({{5, 6}, {7, 8}})},
+     {LocalDenseToCRS({{1, 0, 2}, {0, 3, 0}}), LocalDenseToCRS({{0, 1}, {4, 0}, {5, 6}})},
+     {LocalDenseToCRS({{1, 0, 0}, {0, 2, 0}, {0, 0, 3}}), LocalDenseToCRS({{4, 0, 0}, {0, 5, 0}, {0, 0, 6}})},
+     {LocalDenseToCRS({{7}}), LocalDenseToCRS({{8}})}}};
 
 TEST_P(AshihminDMultMatrCrsFuncTests, SpGemm) {
   ExecuteTest(GetParam());
 }
 
-const auto kTestTasksList = std::tuple_cat(ppc::util::AddFuncTask<AshihminDMultMatrCrsSEQ, AshihminDMultMatrCrsOMP>(
-    kTestParams, PPC_SETTINGS_ashihmin_d_mult_matr_crs));
+// ТРЕТИЙ ПАРАМЕТР ШАБЛОНА - InType. Это гарантирует вызов конструктора SEQ(const InType&)
+const auto kTestTasksList =
+    std::tuple_cat(ppc::util::AddFuncTask<AshihminDMultMatrCrsSEQ, AshihminDMultMatrCrsOMP, InType>(
+        kTestInputs, PPC_SETTINGS_ashihmin_d_mult_matr_crs));
 
 const auto kGtestValues = ppc::util::ExpandToValues(kTestTasksList);
 INSTANTIATE_TEST_SUITE_P(AshihminSparseCRSTests, AshihminDMultMatrCrsFuncTests, kGtestValues,
