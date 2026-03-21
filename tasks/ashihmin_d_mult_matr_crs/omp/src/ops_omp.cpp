@@ -2,10 +2,11 @@
 
 #include <omp.h>
 
-#include <algorithm>
 #include <cmath>
 #include <map>
 #include <vector>
+
+#include "ashihmin_d_mult_matr_crs/common/include/common.hpp"
 
 namespace ashihmin_d_mult_matr_crs {
 
@@ -29,28 +30,24 @@ bool AshihminDMultMatrCrsOMP::PreProcessingImpl() {
 }
 
 bool AshihminDMultMatrCrsOMP::RunImpl() {
-  const auto &A = GetInput().first;
-  const auto &B = GetInput().second;
-  auto &C = GetOutput();
+  const auto &matrix_a = GetInput().first;
+  const auto &matrix_b = GetInput().second;
+  auto &matrix_c = GetOutput();
+  int rows_a = matrix_a.rows;
 
-  int rows_a = A.rows;
   std::vector<std::vector<int>> local_cols(rows_a);
   std::vector<std::vector<double>> local_vals(rows_a);
 
-#pragma omp parallel for
+#pragma omp parallel for default(none) shared(matrix_a, matrix_b, local_cols, local_vals, rows_a)
   for (int i = 0; i < rows_a; ++i) {
     std::map<int, double> row_accumulator;
-    for (int j = A.row_ptr[i]; j < A.row_ptr[i + 1]; ++j) {
-      int col_a = A.col_index[j];
-      double val_a = A.values[j];
-
-      for (int k = B.row_ptr[col_a]; k < B.row_ptr[col_a + 1]; ++k) {
-        int col_b = B.col_index[k];
-        double val_b = B.values[k];
-        row_accumulator[col_b] += val_a * val_b;
+    for (int j = matrix_a.row_ptr[i]; j < matrix_a.row_ptr[i + 1]; ++j) {
+      int col_a = matrix_a.col_index[j];
+      double val_a = matrix_a.values[j];
+      for (int k = matrix_b.row_ptr[col_a]; k < matrix_b.row_ptr[col_a + 1]; ++k) {
+        row_accumulator[matrix_b.col_index[k]] += val_a * matrix_b.values[k];
       }
     }
-
     for (const auto &[col, val] : row_accumulator) {
       if (std::abs(val) > 1e-15) {
         local_cols[i].push_back(col);
@@ -60,11 +57,10 @@ bool AshihminDMultMatrCrsOMP::RunImpl() {
   }
 
   for (int i = 0; i < rows_a; ++i) {
-    C.col_index.insert(C.col_index.end(), local_cols[i].begin(), local_cols[i].end());
-    C.values.insert(C.values.end(), local_vals[i].begin(), local_vals[i].end());
-    C.row_ptr[i + 1] = static_cast<int>(C.values.size());
+    matrix_c.col_index.insert(matrix_c.col_index.end(), local_cols[i].begin(), local_cols[i].end());
+    matrix_c.values.insert(matrix_c.values.end(), local_vals[i].begin(), local_vals[i].end());
+    matrix_c.row_ptr[i + 1] = static_cast<int>(matrix_c.values.size());
   }
-
   return true;
 }
 
