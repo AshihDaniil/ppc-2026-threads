@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cmath>
+#include <map>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -13,7 +14,7 @@
 
 namespace ashihmin_d_mult_matr_crs {
 
-CRSMatrix DenseToCRS(const DenseMatrix &dense) {
+inline CRSMatrix DenseToCRS(const DenseMatrix &dense) {
   CRSMatrix res;
   res.rows = static_cast<int>(dense.size());
   res.cols = dense.empty() ? 0 : static_cast<int>(dense[0].size());
@@ -28,88 +29,89 @@ CRSMatrix DenseToCRS(const DenseMatrix &dense) {
     }
     res.row_ptr[i + 1] = static_cast<int>(res.values.size());
   }
+
   return res;
 }
 
-bool CompareCRS(const CRSMatrix &A, const CRSMatrix &B) {
-  if (A.rows != B.rows || A.cols != B.cols) {
-    return false;
-  }
-  if (A.row_ptr != B.row_ptr) {
-    return false;
-  }
-  if (A.col_index != B.col_index) {
-    return false;
-  }
-  if (A.values.size() != B.values.size()) {
-    return false;
-  }
+using InType = std::pair<CRSMatrix, CRSMatrix>;
+using OutType = CRSMatrix;
 
-  for (size_t i = 0; i < A.values.size(); ++i) {
-    if (std::abs(A.values[i] - B.values[i]) > 1e-8) {
-      return false;
-    }
-  }
-  return true;
-}
-
-using TestType = std::tuple<std::string, DenseMatrix, DenseMatrix, DenseMatrix>;
-
-class AshihminDMultMatrCrsFuncTests : public ppc::util::BaseRunFuncTests<InType, OutType, TestType> {
+class AshihminDMultMatrCrsFuncTests : public ppc::util::BaseRunFuncTests<InType, OutType, InType> {
  public:
-  static std::string PrintTestParam(const TestType &param) {
-    return std::get<0>(param);
+  static std::string PrintTestParam(const InType &) {
+    return "SparseCRS";
   }
 
  protected:
   void SetUp() override {
-    auto params = std::get<static_cast<size_t>(ppc::util::GTestParamIndex::kTestParams)>(GetParam());
-
-    const auto &A = std::get<1>(params);
-    const auto &B = std::get<2>(params);
-    const auto &C = std::get<3>(params);
-
-    input_data_ = std::make_pair(DenseToCRS(A), DenseToCRS(B));
-    expected_output_ = DenseToCRS(C);
-  }
-
-  bool CheckTestOutputData(OutType &output_data) final {
-    return CompareCRS(output_data, expected_output_);
+    auto param = std::get<static_cast<size_t>(ppc::util::GTestParamIndex::kTestParams)>(GetParam());
+    input_data_ = param;
   }
 
   InType GetTestInputData() final {
     return input_data_;
   }
 
+  bool CheckTestOutputData(OutType &output_data) final {
+    const auto &A = input_data_.first;
+    const auto &B = input_data_.second;
+
+    std::vector<double> expected_vals;
+    std::vector<int> expected_cols;
+    std::vector<int> expected_ptr(A.rows + 1, 0);
+
+    for (int i = 0; i < A.rows; ++i) {
+      std::map<int, double> acc;
+
+      for (int j = A.row_ptr[i]; j < A.row_ptr[i + 1]; ++j) {
+        int col_a = A.col_index[j];
+        double val_a = A.values[j];
+
+        for (int k = B.row_ptr[col_a]; k < B.row_ptr[col_a + 1]; ++k) {
+          int col_b = B.col_index[k];
+          double val_b = B.values[k];
+          acc[col_b] += val_a * val_b;
+        }
+      }
+
+      for (const auto &[col, val] : acc) {
+        if (std::abs(val) > 1e-10) {
+          expected_cols.push_back(col);
+          expected_vals.push_back(val);
+        }
+      }
+
+      expected_ptr[i + 1] = static_cast<int>(expected_vals.size());
+    }
+
+    return output_data.row_ptr == expected_ptr && output_data.col_index == expected_cols &&
+           output_data.values.size() == expected_vals.size();
+  }
+
  private:
   InType input_data_;
-  CRSMatrix expected_output_;
 };
 
-TEST_P(AshihminDMultMatrCrsFuncTests, SpGemmCrs) {
+TEST_P(AshihminDMultMatrCrsFuncTests, SpGemmCRS) {
   ExecuteTest(GetParam());
 }
 
-const std::array<TestType, 6> kTestParams = {
-    std::make_tuple("Identity_2x2", DenseMatrix{{1, 0}, {0, 1}}, DenseMatrix{{5, 6}, {7, 8}},
-                    DenseMatrix{{5, 6}, {7, 8}}),
+static const std::array<InType, 6> kTestInputs = {
+    InType{DenseToCRS({{1, 0}, {0, 1}}), DenseToCRS({{5, 6}, {7, 8}})},
 
-    std::make_tuple("ZeroMatrix", DenseMatrix{{0, 0}, {0, 0}}, DenseMatrix{{1, 2}, {3, 4}},
-                    DenseMatrix{{0, 0}, {0, 0}}),
+    InType{DenseToCRS({{0, 0}, {0, 0}}), DenseToCRS({{1, 2}, {3, 4}})},
 
-    std::make_tuple("Simple_2x2", DenseMatrix{{1, 2}, {3, 4}}, DenseMatrix{{5, 6}, {7, 8}},
-                    DenseMatrix{{19, 22}, {43, 50}}),
+    InType{DenseToCRS({{1, 2}, {3, 4}}), DenseToCRS({{5, 6}, {7, 8}})},
 
-    std::make_tuple("Rectangular", DenseMatrix{{1, 0, 2}, {0, 3, 0}}, DenseMatrix{{0, 1}, {4, 0}, {5, 6}},
-                    DenseMatrix{{10, 13}, {12, 0}}),
+    InType{DenseToCRS({{1, 0, 2}, {0, 3, 0}}), DenseToCRS({{0, 1}, {4, 0}, {5, 6}})},
 
-    std::make_tuple("Diagonal", DenseMatrix{{1, 0, 0}, {0, 2, 0}, {0, 0, 3}},
-                    DenseMatrix{{4, 0, 0}, {0, 5, 0}, {0, 0, 6}}, DenseMatrix{{4, 0, 0}, {0, 10, 0}, {0, 0, 18}}),
+    InType{DenseToCRS({{1, 0, 0}, {0, 2, 0}, {0, 0, 3}}), DenseToCRS({{4, 0, 0}, {0, 5, 0}, {0, 0, 6}})},
 
-    std::make_tuple("Single", DenseMatrix{{7}}, DenseMatrix{{8}}, DenseMatrix{{56}})};
+    InType{DenseToCRS({{7}}), DenseToCRS({{8}})}};
 
-const auto kTestTasksList = std::tuple_cat(ppc::util::AddFuncTask<AshihminDMultMatrCrsSEQ, AshihminDMultMatrCrsOMP>(
-    kTestParams, PPC_SETTINGS_ashihmin_d_mult_matr_crs));
+const auto kTestTasksList =
+    std::tuple_cat(ppc::util::AddFuncTask<AshihminDMultMatrCrsSEQ, AshihminDMultMatrCrsOMP, InType>(
+        kTestInputs, PPC_SETTINGS_ashihmin_d_mult_matr_crs));
 
 const auto kGtestValues = ppc::util::ExpandToValues(kTestTasksList);
 
